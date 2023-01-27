@@ -1,3 +1,5 @@
+[![Github actions](https://github.com/wxleong/secora-blockchain-walletconnect/actions/workflows/main.yml/badge.svg)](https://github.com/wxleong/secora-blockchain-walletconnect/actions)
+
 # Introduction
 
 An Android application to connect the [Infineon's SECORA™ Blockchain](https://www.infineon.com/cms/en/product/security-smart-card-solutions/secora-security-solutions/secora-blockchain-security-solutions/) or [Blockchain Security 2Go starter kit](https://www.infineon.com/cms/en/product/evaluation-boards/blockchainstartkit/) with Dapps (Web3 Apps) using the [WalletConnect](https://walletconnect.com/) protocol. 
