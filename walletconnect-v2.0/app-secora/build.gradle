@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion 31
+    compileSdkVersion 33
     defaultConfig {
         applicationId "com.infineon.walletconnect.sample"
         minSdkVersion 23
@@ -38,6 +38,11 @@ dependencies {
 
     implementation "com.squareup.okhttp3:okhttp:4.9.3"
     implementation "com.google.code.gson:gson:2.9.0"
+
+
+    implementation platform("com.walletconnect:android-bom:1.4.0")
+    implementation "com.walletconnect:android-core"
+    implementation "com.walletconnect:web3wallet"
 
     implementation "com.github.wxleong:secora-blockchain-apdu:develop-genesis-SNAPSHOT"
     implementation "com.github.yuriy-budiyev:code-scanner:2.3.2"

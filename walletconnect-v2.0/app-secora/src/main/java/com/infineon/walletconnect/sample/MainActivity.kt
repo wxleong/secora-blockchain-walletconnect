@@ -21,6 +21,11 @@ import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
 import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
+import com.walletconnect.android.Core
+import com.walletconnect.android.CoreClient
+import com.walletconnect.android.relay.ConnectionType
+import com.walletconnect.web3.wallet.client.Web3Wallet
+import com.walletconnect.web3.wallet.client.Wallet
 import okhttp3.internal.and
 import org.web3j.crypto.*
 import java.math.BigInteger
@@ -37,6 +42,10 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     private data class SignatureDataObject(val r: ByteArray, val s: ByteArray, val v: ByteArray,
                                            val sigCounter: ByteArray, val globalSigCounter: ByteArray)
     private data class DialogDataObject(val alertDialog: AlertDialog, val view: View)
+
+    /* Get Project ID at https://cloud.walletconnect.com/ */
+    private val projectId = "f2cabf62d43121c04c15dfae7fa389df"
+    private val relayUrl = "relay.walletconnect.com"
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var nfcAdapter: NfcAdapter
@@ -119,6 +128,99 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
         }
 
         /* Set up wallet connect */
+
+        val serverUrl = "wss://$relayUrl?projectId=$projectId"
+
+        CoreClient.initialize(
+            relayServerUrl = serverUrl, connectionType = ConnectionType.AUTOMATIC, application = application,
+            metaData = Core.Model.AppMetaData(
+                name = "Secora Blockchain",
+                description = "Secora Blockchain",
+                url = "https://www.infineon.com/cms/en/product/security-smart-card-solutions/secora-security-solutions/secora-blockchain-security-solutions/",
+                icons = listOf(""),
+                redirect = ""
+            )
+        ) { _ ->
+            runOnUiThread {
+                Toast.makeText(this@MainActivity,
+                    "WalletConnect module (CoreClient) init has failed!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val initParams = Wallet.Params.Init(core = CoreClient)
+        Web3Wallet.initialize(initParams) { error ->
+            runOnUiThread {
+                Toast.makeText(this@MainActivity,
+                    "WalletConnect module (Web3Wallet) init has failed!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val walletDelegate = object : Web3Wallet.WalletDelegate {
+            override fun onSessionProposal(sessionProposal: Wallet.Model.SessionProposal) {
+                // Triggered when wallet receives the session proposal sent by a Dapp
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onSessionProposal", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onSessionRequest(sessionRequest: Wallet.Model.SessionRequest) {
+                // Triggered when a Dapp sends SessionRequest to sign a transaction or a message
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onSessionRequest", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onAuthRequest(authRequest: Wallet.Model.AuthRequest) {
+                // Triggered when Dapp / Requester makes an authorisation request
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onAuthRequest", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onSessionDelete(sessionDelete: Wallet.Model.SessionDelete) {
+                // Triggered when the session is deleted by the peer
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onSessionDelete", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onSessionSettleResponse(settleSessionResponse: Wallet.Model.SettledSessionResponse) {
+                // Triggered when wallet receives the session settlement response from Dapp
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onSessionSettleResponse", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onSessionUpdateResponse(sessionUpdateResponse: Wallet.Model.SessionUpdateResponse) {
+                // Triggered when wallet receives the session update response from Dapp
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onSessionUpdateResponse", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onConnectionStateChange(state: Wallet.Model.ConnectionState) {
+                //Triggered whenever the connection state is changed
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onConnectionStateChange", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onError(error: Wallet.Model.Error) {
+                // Triggered whenever there is an issue inside the SDK
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity,
+                        "onError", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        Web3Wallet.setWalletDelegate(walletDelegate)
 
         setupConnectButton()
     }
@@ -274,12 +376,32 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     private fun connect(uri: String) {
         /* Disconnect from existing session if there is one */
         disconnect()
+
         /* Connect to a new session */
-        /* ... */
+
+        val pairingParamsWallet = Wallet.Params.Pair(uri)
+        Web3Wallet.pair(pairingParamsWallet,
+            { _ ->
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        "Web3Wallet: Pairing to Dapp", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            { _ ->
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        "Web3Wallet: Dapp paring has failed!", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            })
     }
 
     private fun disconnect() {
-        /* ?? */
+        //val disconnect = Wallet.Params.SessionDisconnect(sessionTopic)
+        //Web3Wallet.disconnectSession(disconnect) { error -> }
     }
 
     private fun onDisconnect() {
