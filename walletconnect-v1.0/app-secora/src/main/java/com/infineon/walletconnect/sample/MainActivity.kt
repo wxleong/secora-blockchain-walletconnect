@@ -1,4 +1,4 @@
-package com.trustwallet.walletconnect.sample
+package com.infineon.walletconnect.sample
 
 import android.app.PendingIntent
 import android.content.DialogInterface
@@ -35,7 +35,7 @@ import com.trustwallet.walletconnect.models.binance.WCBinanceTxConfirmParam
 import com.trustwallet.walletconnect.models.ethereum.WCEthereumSignMessage
 import com.trustwallet.walletconnect.models.ethereum.WCEthereumTransaction
 import com.trustwallet.walletconnect.models.session.WCSession
-import com.trustwallet.walletconnect.sample.databinding.ActivityMainBinding
+import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
 import okhttp3.OkHttpClient
 import okhttp3.internal.and
 import org.web3j.crypto.*
