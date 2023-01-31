@@ -21,14 +21,28 @@ import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
 import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
+import com.walletconnect.android.BuildConfig.PROJECT_ID
 import com.walletconnect.android.Core
 import com.walletconnect.android.CoreClient
+import com.walletconnect.android.cacao.sign
+import com.walletconnect.android.cacao.signature.SignatureType
+import com.walletconnect.android.internal.common.cacao.Cacao
+import com.walletconnect.android.internal.common.cacao.CacaoType
+import com.walletconnect.android.internal.common.cacao.CacaoVerifier
+import com.walletconnect.android.internal.common.cacao.signature.Signature
+import com.walletconnect.android.internal.common.cacao.signature.toCacaoSignature
+import com.walletconnect.android.internal.common.model.ProjectId
+import com.walletconnect.android.internal.utils.CoreValidator
 import com.walletconnect.android.relay.ConnectionType
+import com.walletconnect.util.hexToBytes
 import com.walletconnect.web3.wallet.client.Web3Wallet
 import com.walletconnect.web3.wallet.client.Wallet
+import com.walletconnect.web3.wallet.utils.CacaoSigner
 import okhttp3.internal.and
+import okhttp3.internal.wait
 import org.web3j.crypto.*
 import java.math.BigInteger
+import javax.crypto.Cipher.PRIVATE_KEY
 
 class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
@@ -46,6 +60,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     /* Get Project ID at https://cloud.walletconnect.com/ */
     private val projectId = "f2cabf62d43121c04c15dfae7fa389df"
     private val relayUrl = "relay.walletconnect.com"
+    val ISS_DID_PREFIX = "did:pkh:"
+    fun Map.Entry<Chains, String>.toIssuer(): String = "$ISS_DID_PREFIX${key.chainId}:$value"
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var nfcAdapter: NfcAdapter
@@ -158,66 +174,42 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
         val walletDelegate = object : Web3Wallet.WalletDelegate {
             override fun onSessionProposal(sessionProposal: Wallet.Model.SessionProposal) {
                 // Triggered when wallet receives the session proposal sent by a Dapp
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onSessionProposal", Toast.LENGTH_SHORT).show()
-                }
+                processSessionProposal(sessionProposal)
             }
 
             override fun onSessionRequest(sessionRequest: Wallet.Model.SessionRequest) {
                 // Triggered when a Dapp sends SessionRequest to sign a transaction or a message
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onSessionRequest", Toast.LENGTH_SHORT).show()
-                }
+                processSessionRequest(sessionRequest)
             }
 
             override fun onAuthRequest(authRequest: Wallet.Model.AuthRequest) {
                 // Triggered when Dapp / Requester makes an authorisation request
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onAuthRequest", Toast.LENGTH_SHORT).show()
-                }
+                processAuthRequest(authRequest)
             }
 
             override fun onSessionDelete(sessionDelete: Wallet.Model.SessionDelete) {
                 // Triggered when the session is deleted by the peer
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onSessionDelete", Toast.LENGTH_SHORT).show()
-                }
+                processSessionDelete(sessionDelete)
             }
 
             override fun onSessionSettleResponse(settleSessionResponse: Wallet.Model.SettledSessionResponse) {
                 // Triggered when wallet receives the session settlement response from Dapp
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onSessionSettleResponse", Toast.LENGTH_SHORT).show()
-                }
+                processSessionSettleResponse(settleSessionResponse)
             }
 
             override fun onSessionUpdateResponse(sessionUpdateResponse: Wallet.Model.SessionUpdateResponse) {
                 // Triggered when wallet receives the session update response from Dapp
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onSessionUpdateResponse", Toast.LENGTH_SHORT).show()
-                }
+                processSessionUpdateResponse(sessionUpdateResponse)
             }
 
             override fun onConnectionStateChange(state: Wallet.Model.ConnectionState) {
                 //Triggered whenever the connection state is changed
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onConnectionStateChange", Toast.LENGTH_SHORT).show()
-                }
+                processConnectionStateChange(state)
             }
 
             override fun onError(error: Wallet.Model.Error) {
                 // Triggered whenever there is an issue inside the SDK
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity,
-                        "onError", Toast.LENGTH_SHORT).show()
-                }
+                processError(error)
             }
         }
         Web3Wallet.setWalletDelegate(walletDelegate)
@@ -374,42 +366,18 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     }
 
     private fun connect(uri: String) {
-        /* Disconnect from existing session if there is one */
-        disconnect()
-
-        /* Connect to a new session */
-
         val pairingParamsWallet = Wallet.Params.Pair(uri)
         Web3Wallet.pair(pairingParamsWallet,
             { _ ->
-                runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        "Web3Wallet: Pairing to Dapp", Toast.LENGTH_SHORT
-                    ).show()
-                }
             },
-            { _ ->
+            { error ->
                 runOnUiThread {
                     Toast.makeText(
                         this,
-                        "Web3Wallet: Dapp paring has failed!", Toast.LENGTH_SHORT
+                        error.throwable.message, Toast.LENGTH_SHORT
                     ).show()
                 }
             })
-    }
-
-    private fun disconnect() {
-        //val disconnect = Wallet.Params.SessionDisconnect(sessionTopic)
-        //Web3Wallet.disconnectSession(disconnect) { error -> }
-    }
-
-    private fun onDisconnect() {
-        setupConnectButton()
-    }
-
-    private fun onFailure(throwable: Throwable) {
-        throwable.printStackTrace()
     }
 
     private fun String.decodeHex(): ByteArray {
@@ -648,6 +616,178 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
         return SignatureDataObject(r, s, v, signature.sigCounter, signature.globalSigCounter)
     }
 
+    private fun processSessionProposal(sessionProposal: Wallet.Model.SessionProposal) {
+        runOnUiThread {
+            try {
+                val ethereumNamespace = sessionProposal.requiredNamespaces[Chains.ETHEREUM_MAIN.chainNamespace]
+                    ?: throw Exception("Only namespaces ${Chains.ETHEREUM_MAIN.chainNamespace} is supported")
+
+                val address = binding.addressInput.editText?.text.toString().lowercase()
+                val accounts: ArrayList<String> = ArrayList()
+
+                for (chain in ethereumNamespace.chains) {
+                    if (chain == Chains.ETHEREUM_MAIN.chainId) {
+                        accounts.add("${Chains.ETHEREUM_MAIN.chainId}:${address}")
+                    } else if (chain == Chains.ETHEREUM_GOERLI.chainId) {
+                        accounts.add("${Chains.ETHEREUM_GOERLI.chainId}:${address}")
+                    } else {
+                        throw Exception("Chain ${chain} is not supported")
+                    }
+                }
+
+                val mapOfNamespace: Map<String, Wallet.Model.Namespace.Session> = mapOf(
+                    Chains.ETHEREUM_MAIN.chainNamespace to Wallet.Model.Namespace.Session(
+                        accounts.toList(), Chains.ETHEREUM_MAIN.methods, Chains.ETHEREUM_MAIN.events, null)
+                )
+
+                createAndShowDefaultDialog("SessionProposal",
+                    sessionProposal.description,
+                    "Approve",
+                    { _, _ ->
+                        val approveProposal = Wallet.Params.SessionApprove(sessionProposal.proposerPublicKey, mapOfNamespace)
+                        Web3Wallet.approveSession(approveProposal) { error ->
+                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    "Reject",
+                    { _, _ ->
+                        val reject = Wallet.Params.SessionReject(sessionProposal.proposerPublicKey, "Rejected by user")
+                        Web3Wallet.rejectSession(reject) { error ->
+                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                        }
+                    })
+            } catch (e: Exception) {
+                Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun processSessionRequest(sessionRequest: Wallet.Model.SessionRequest) {
+        runOnUiThread {
+            Toast.makeText(this@MainActivity,
+                "onSessionRequest", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun processAuthRequest(authRequest: Wallet.Model.AuthRequest) {
+        runOnUiThread {
+            try {
+                val address = binding.addressInput.editText?.text.toString().lowercase()
+                val mapOfAccounts: Map<Chains, String> = mapOf(
+                    Chains.ETHEREUM_MAIN to address,
+                )
+                val issuer = mapOfAccounts.map { it.toIssuer() }.first()
+
+                val message = Web3Wallet.formatMessage(
+                    Wallet.Params.FormatMessage(
+                        authRequest.payloadParams,
+                        issuer
+                    )
+                ) ?: throw Exception("Error formatting message")
+
+                val alertDialogObject = createAndShowCustomDialog("AuthRequest", message)
+                nfcCallback = { isoTagWrapper ->
+                    try {
+                        /* Sign with Secora Blockchain */
+
+                        val keyHandle = binding.nfcKeyhandle.editText?.text.toString()
+                        alertDialogPin =
+                            alertDialogObject.view.findViewById<TextInputLayout>(R.id.dialogPinInput).editText?.text.toString()
+                        val pin = if (alertDialogPin != "0") {
+                            alertDialogPin.decodeHex()
+                        } else {
+                            null
+                        }
+                        val byteArrayData = message.toByteArray()
+                        val prefix = ("\u0019Ethereum Signed Message:\n" + byteArrayData.size).toByteArray(Charsets.UTF_8)
+                        val byteArrayToSign = Hash.sha3(prefix + byteArrayData)
+                        val sig = signing(
+                            isoTagWrapper,
+                            Integer.parseInt(keyHandle),
+                            pin,
+                            byteArrayToSign
+                        )
+                        val signature = Signature(sig.v, sig.r, sig.s).toCacaoSignature()
+
+                        /* Signature redundancy check */
+                        val cacaoSignature = Cacao.Signature(
+                            SignatureType.EIP191.header,
+                            signature,
+                            message
+                        )
+                        val payload = Cacao.Payload(issuer, authRequest.payloadParams.domain,
+                            authRequest.payloadParams.aud, authRequest.payloadParams.version,
+                            authRequest.payloadParams.nonce, authRequest.payloadParams.iat,
+                            authRequest.payloadParams.nbf, authRequest.payloadParams.exp,
+                            authRequest.payloadParams.statement, authRequest.payloadParams.requestId,
+                            authRequest.payloadParams.resources)
+                        val cacao = Cacao(CacaoType.EIP4361.toHeader(), payload, cacaoSignature)
+                        val cacaoVerifier = CacaoVerifier(ProjectId(""))
+                        if (!cacaoVerifier.verify(cacao))
+                            throw Exception("Signature redundancy check has failed")
+
+                        /* Send response */
+                        val modelCacaoSignature = Wallet.Model.Cacao.Signature(
+                            SignatureType.EIP191.header,
+                            signature,
+                            message
+                        )
+                        Web3Wallet.respondAuthRequest(
+                            Wallet.Params.AuthRequestResponse.Result(
+                                authRequest.id,
+                                modelCacaoSignature,
+                                issuer
+                            )
+                        ) { error ->
+                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                    } finally {
+                        alertDialogObject.alertDialog.dismiss()
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun processSessionDelete(sessionDelete: Wallet.Model.SessionDelete) {
+        runOnUiThread {
+            Toast.makeText(this@MainActivity,
+                "onSessionDelete", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun processSessionSettleResponse(settleSessionResponse: Wallet.Model.SettledSessionResponse) {
+        runOnUiThread {
+            Toast.makeText(this@MainActivity,
+                "onSessionSettleResponse", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun processSessionUpdateResponse(sessionUpdateResponse: Wallet.Model.SessionUpdateResponse) {
+        runOnUiThread {
+            Toast.makeText(this@MainActivity,
+                "onSessionUpdateResponse", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun processConnectionStateChange(state: Wallet.Model.ConnectionState) {
+        runOnUiThread {
+            Toast.makeText(this@MainActivity,
+                "onConnectionStateChange: $state", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun processError(error: Wallet.Model.Error) {
+        runOnUiThread {
+            Toast.makeText(this@MainActivity,
+                "onError", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun createAndShowDefaultDialog(
         title: String, message: String,
         positiveBtnText: String?, positiveCallbank: DialogInterface.OnClickListener?,
@@ -675,7 +815,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
         alertDialog!!.setCanceledOnTouchOutside(false)
     }
 
-    private fun createAndShowCustomDialog(id: Long, title: String, message: String): DialogDataObject {
+    private fun createAndShowCustomDialog(title: String, message: String): DialogDataObject {
 
         if (alertDialog != null && alertDialog!!.isShowing) {
             alertDialog!!.dismiss()
@@ -692,7 +832,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
             .setPositiveButton("Tap Your Card To Sign") { _, _ ->
             }
             .setNegativeButton("Cancel") { _, _ ->
-                //wcClient.rejectRequest(id, "User canceled")
+
             }
             .setOnDismissListener {
                 nfcCallback = { isoTagWrapper -> nfcDefaultCallback(isoTagWrapper) }
