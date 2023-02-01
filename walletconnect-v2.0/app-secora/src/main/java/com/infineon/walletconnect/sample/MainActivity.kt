@@ -34,8 +34,10 @@ import com.walletconnect.android.relay.ConnectionType
 import com.walletconnect.web3.wallet.client.Web3Wallet
 import com.walletconnect.web3.wallet.client.Wallet
 import okhttp3.internal.and
+import org.json.JSONArray
 import org.web3j.crypto.*
 import java.math.BigInteger
+import java.nio.charset.Charset
 
 class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
@@ -691,8 +693,114 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
     private fun processSessionRequest(sessionRequest: Wallet.Model.SessionRequest) {
         runOnUiThread {
-            Toast.makeText(this@MainActivity,
-                "onSessionRequest", Toast.LENGTH_SHORT).show()
+            try {
+                if (sessionRequest.chainId != Chains.ETHEREUM_MAIN.chainId) {
+                    throw Exception("Only chainId ${Chains.ETHEREUM_MAIN.chainId} is supported")
+                }
+
+                val address = binding.addressInput.editText?.text.toString().lowercase()
+                //val jsonObject = JSONObject(sessionRequest.request.params)
+                //val keys = jsonObject.names()
+
+                when (sessionRequest.request.method) {
+                    Chains.Info.Eth.defaultMethods[0] -> {
+                        /* eth_sendTransaction */
+                    }
+                    Chains.Info.Eth.defaultMethods[1] -> {
+                        /* eth_signTransaction */
+                    }
+                    Chains.Info.Eth.defaultMethods[2] -> {
+                        /* eth_sign */
+                    }
+                    Chains.Info.Eth.defaultMethods[3] -> {
+                        /* eth_signTypedData */
+                    }
+                    Chains.Info.Eth.defaultMethods[4] -> {
+                        /* personal_sign */
+
+                        val jsonArray = JSONArray(sessionRequest.request.params)
+                        val message = jsonArray.getString(0)
+                        val account = jsonArray.getString(1)
+
+                        if (account != address) {
+                            throw Exception("Requested account is not valid")
+                        }
+
+                        val byteArrayData = message.decodeHex()
+                        val dialogMessage = byteArrayData.toString(Charset.defaultCharset())
+
+                        val alertDialogObject = createAndShowCustomDialog(sessionRequest.request.method, dialogMessage) {
+                            Web3Wallet.respondSessionRequest(
+                                Wallet.Params.SessionRequestResponse(
+                                    sessionRequest.topic,
+                                    Wallet.Model.JsonRpcResponse.JsonRpcError(
+                                        sessionRequest.request.id,
+                                        4001, /* https://docs.walletconnect.com/2.0/specs/clients/sign/error-codes */
+                                        "User Rejected Request"
+                                    )
+                                )
+                            ) { error ->
+                                runOnUiThread {
+                                    Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+
+                        nfcCallback = { isoTagWrapper ->
+                            try {
+                                /* Sign with Secora Blockchain */
+
+                                val keyHandle = binding.nfcKeyhandle.editText?.text.toString()
+                                alertDialogPin =
+                                    alertDialogObject.view.findViewById<TextInputLayout>(R.id.dialogPinInput).editText?.text.toString()
+                                val pin = if (alertDialogPin != "0") {
+                                    alertDialogPin.decodeHex()
+                                } else {
+                                    null
+                                }
+                                val prefix = ("\u0019Ethereum Signed Message:\n" + byteArrayData.size).toByteArray(Charsets.UTF_8)
+                                val byteArrayToSign = Hash.sha3(prefix + byteArrayData)
+                                val sig = signing(
+                                    isoTagWrapper,
+                                    Integer.parseInt(keyHandle),
+                                    pin,
+                                    byteArrayToSign
+                                )
+                                val signature = Signature(sig.v, sig.r, sig.s).toCacaoSignature()
+
+                                /* Send response */
+
+                                Web3Wallet.respondSessionRequest(
+                                    Wallet.Params.SessionRequestResponse(
+                                        sessionRequest.topic,
+                                        Wallet.Model.JsonRpcResponse.JsonRpcResult(
+                                            sessionRequest.request.id,
+                                            signature
+                                        )
+                                    )
+                                ) { error ->
+                                    runOnUiThread {
+                                        Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                                }
+                                disconnect()
+                            } finally {
+                                alertDialogObject.alertDialog.dismiss()
+                            }
+                        }
+                    }
+                    else -> {
+                        throw Exception("Unknown method")
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                disconnect()
+            }
         }
     }
 
