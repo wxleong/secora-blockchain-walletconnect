@@ -221,7 +221,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
             isoDep.close()
         } catch (e: Exception) {
-            Toast.makeText(this, e.toString(), Toast.LENGTH_LONG).show()
+            runOnUiThread {
+                Toast.makeText(this, e.toString(), Toast.LENGTH_LONG).show()
+            }
         } finally {
             nfcCallback = { isoTagWrapper -> nfcDefaultCallback(isoTagWrapper) }
         }
@@ -333,6 +335,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     private fun setupConnectButton() {
         runOnUiThread {
             binding.connectButton.text = "Connect"
+            binding.connectButton.isEnabled = true
             binding.connectButton.setOnClickListener {
                 val uri = binding.uriInput.editText?.text?.toString()
                 val address = binding.addressInput.editText?.text?.toString()
@@ -378,6 +381,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     }
 
     private fun disconnect() {
+        setupConnectButton()
+
         for (pair in CoreClient.Pairing.getPairings()) {
             CoreClient.Pairing.disconnect(Core.Params.Disconnect(pair.topic)) { error ->
                 runOnUiThread {
@@ -415,7 +420,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     }
 
     private fun openNfcSettings() {
-        Toast.makeText(this, "Please enable NFC", Toast.LENGTH_SHORT).show()
+        runOnUiThread {
+            Toast.makeText(this, "Please enable NFC", Toast.LENGTH_SHORT).show()
+        }
         val intent = Intent(Settings.ACTION_NFC_SETTINGS)
         startActivity(intent)
     }
@@ -531,7 +538,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                 }
             }
         } catch (e: Exception) {
-            Toast.makeText(this, e.toString(), Toast.LENGTH_LONG).show()
+            runOnUiThread {
+                Toast.makeText(this, e.toString(), Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -656,15 +665,22 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                     { _, _ ->
                         val approveProposal = Wallet.Params.SessionApprove(sessionProposal.proposerPublicKey, mapOfNamespace)
                         Web3Wallet.approveSession(approveProposal) { error ->
-                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                            runOnUiThread {
+                                Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                            }
                         }
+                        binding.connectButton.text = "Pending..."
+                        binding.connectButton.isEnabled = false
                     },
                     "Reject",
                     { _, _ ->
                         val reject = Wallet.Params.SessionReject(sessionProposal.proposerPublicKey, "Rejected by user")
                         Web3Wallet.rejectSession(reject) { error ->
-                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                            runOnUiThread {
+                                Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                            }
                         }
+                        disconnect()
                     })
             } catch (e: Exception) {
                 Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
@@ -704,7 +720,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                             "User Rejected Request"
                         )
                     ) { error ->
-                        Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                        runOnUiThread {
+                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
 
@@ -761,10 +779,15 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                                 issuer
                             )
                         ) { error ->
-                            Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                            runOnUiThread {
+                                Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG)
+                                    .show()
+                            }
                         }
                     } catch (e: Exception) {
-                        Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                        runOnUiThread {
+                            Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                        }
                         disconnect()
                     } finally {
                         alertDialogObject.alertDialog.dismiss()
@@ -779,22 +802,69 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
     private fun processSessionDelete(sessionDelete: Wallet.Model.SessionDelete) {
         runOnUiThread {
-            Toast.makeText(this@MainActivity,
-                "onSessionDelete", Toast.LENGTH_SHORT).show()
+            try {
+                when(sessionDelete) {
+                    is Wallet.Model.SessionDelete.Success -> {
+                    }
+                    is Wallet.Model.SessionDelete.Error -> {
+                        throw sessionDelete.error
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+            } finally {
+                disconnect()
+            }
         }
     }
 
     private fun processSessionSettleResponse(settleSessionResponse: Wallet.Model.SettledSessionResponse) {
         runOnUiThread {
-            Toast.makeText(this@MainActivity,
-                "onSessionSettleResponse", Toast.LENGTH_SHORT).show()
+            try {
+                when(settleSessionResponse) {
+                    is Wallet.Model.SettledSessionResponse.Result -> {
+                        binding.connectButton.text = "Kill Session"
+                        binding.connectButton.isEnabled = true
+                        binding.connectButton.setOnClickListener {
+                            val disconnect = Wallet.Params.SessionDisconnect(settleSessionResponse.session.topic)
+                            Web3Wallet.disconnectSession(disconnect,
+                                {
+                                    disconnect()
+                                },
+                                { error ->
+                                    runOnUiThread {
+                                        Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    is Wallet.Model.SettledSessionResponse.Error -> {
+                        throw Exception(settleSessionResponse.errorMessage)
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                disconnect()
+            }
         }
     }
 
     private fun processSessionUpdateResponse(sessionUpdateResponse: Wallet.Model.SessionUpdateResponse) {
         runOnUiThread {
-            Toast.makeText(this@MainActivity,
-                "onSessionUpdateResponse", Toast.LENGTH_SHORT).show()
+            try {
+                when(sessionUpdateResponse) {
+                    is Wallet.Model.SessionUpdateResponse.Result -> {
+
+                    }
+                    is Wallet.Model.SessionUpdateResponse.Error -> {
+                        throw Exception(sessionUpdateResponse.errorMessage)
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                disconnect()
+            }
         }
     }
 
@@ -808,7 +878,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     private fun processError(error: Wallet.Model.Error) {
         runOnUiThread {
             Toast.makeText(this@MainActivity,
-                "onError", Toast.LENGTH_SHORT).show()
+                error.throwable.message, Toast.LENGTH_SHORT).show()
         }
     }
 

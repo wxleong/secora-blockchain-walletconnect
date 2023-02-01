@@ -17,14 +17,20 @@ What is WalletConnect? WalletConnect is an open protocol to communicate securely
     <td>v1.0</td>
     <td>The implementation is based on:
       <ul>
-        <li>The WalletConnect <a href="https://docs.walletconnect.com/1.0/quick-start/wallets/kotlin">examples</a>, project <a href="https://github.com/trustwallet/wallet-connect-kotlin/tree/75b2590a7002a0c7ef1c0ee9633aac58eed0c643">wallet-connect-kotlin@75b2590</a></li>
+        <li>The WalletConnect v1.0 <a href="https://docs.walletconnect.com/1.0/quick-start/wallets/kotlin">examples</a>, project <a href="https://github.com/trustwallet/wallet-connect-kotlin/tree/75b2590a7002a0c7ef1c0ee9633aac58eed0c643">wallet-connect-kotlin@75b2590</a></li>
         <li>The Infineon's <a href="https://github.com/wxleong/secora-blockchain-apdu">secora-blockchain-apdu</a> library</li>
       </ul>
     </td>
   </tr>
   <tr>
     <td>v2.0</td>
-    <td>In progress...</td>
+    <td>The implementation is based on:
+      <ul>
+        <li>The WalletConnect v2.0 <a href="https://docs.walletconnect.com/2.0/kotlin/guides/examples-and-resources">examples</a>, project <a href="https://github.com/WalletConnect/WalletConnectKotlinV2/tree/BOM_1.4.0/web3/wallet">WalletConnectKotlinV2@BOM_1.4.0</a></li>
+        <li>The Infineon's <a href="https://github.com/wxleong/secora-blockchain-apdu">secora-blockchain-apdu</a> library</li>
+      </ul>
+    </td>
+
   </tr>
 </table>
 
