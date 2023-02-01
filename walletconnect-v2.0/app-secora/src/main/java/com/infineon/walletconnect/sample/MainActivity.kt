@@ -21,10 +21,8 @@ import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
 import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
-import com.walletconnect.android.BuildConfig.PROJECT_ID
 import com.walletconnect.android.Core
 import com.walletconnect.android.CoreClient
-import com.walletconnect.android.cacao.sign
 import com.walletconnect.android.cacao.signature.SignatureType
 import com.walletconnect.android.internal.common.cacao.Cacao
 import com.walletconnect.android.internal.common.cacao.CacaoType
@@ -32,17 +30,12 @@ import com.walletconnect.android.internal.common.cacao.CacaoVerifier
 import com.walletconnect.android.internal.common.cacao.signature.Signature
 import com.walletconnect.android.internal.common.cacao.signature.toCacaoSignature
 import com.walletconnect.android.internal.common.model.ProjectId
-import com.walletconnect.android.internal.utils.CoreValidator
 import com.walletconnect.android.relay.ConnectionType
-import com.walletconnect.util.hexToBytes
 import com.walletconnect.web3.wallet.client.Web3Wallet
 import com.walletconnect.web3.wallet.client.Wallet
-import com.walletconnect.web3.wallet.utils.CacaoSigner
 import okhttp3.internal.and
-import okhttp3.internal.wait
 import org.web3j.crypto.*
 import java.math.BigInteger
-import javax.crypto.Cipher.PRIVATE_KEY
 
 class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
@@ -122,7 +115,6 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                 codeScanner.releaseResources()
                 binding.scannerFrame.visibility = View.GONE
                 binding.uriInput.editText?.setText(it.text)
-                Toast.makeText(this, "Scan result: ${it.text}", Toast.LENGTH_LONG).show()
             }
         }
         codeScanner.errorCallback = ErrorCallback {
@@ -173,42 +165,43 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
         val walletDelegate = object : Web3Wallet.WalletDelegate {
             override fun onSessionProposal(sessionProposal: Wallet.Model.SessionProposal) {
-                // Triggered when wallet receives the session proposal sent by a Dapp
+                /* Triggered when wallet receives the session proposal sent by a Dapp */
                 processSessionProposal(sessionProposal)
             }
 
             override fun onSessionRequest(sessionRequest: Wallet.Model.SessionRequest) {
-                // Triggered when a Dapp sends SessionRequest to sign a transaction or a message
+                /* Triggered when a Dapp sends SessionRequest to sign a transaction or a message */
                 processSessionRequest(sessionRequest)
             }
 
             override fun onAuthRequest(authRequest: Wallet.Model.AuthRequest) {
-                // Triggered when Dapp / Requester makes an authorisation request
+                /* Triggered when Dapp / Requester makes an authorisation request */
+                /* https://docs.walletconnect.com/2.0/specs/clients/auth */
                 processAuthRequest(authRequest)
             }
 
             override fun onSessionDelete(sessionDelete: Wallet.Model.SessionDelete) {
-                // Triggered when the session is deleted by the peer
+                /* Triggered when the session is deleted by the peer */
                 processSessionDelete(sessionDelete)
             }
 
             override fun onSessionSettleResponse(settleSessionResponse: Wallet.Model.SettledSessionResponse) {
-                // Triggered when wallet receives the session settlement response from Dapp
+                /* Triggered when wallet receives the session settlement response from Dapp */
                 processSessionSettleResponse(settleSessionResponse)
             }
 
             override fun onSessionUpdateResponse(sessionUpdateResponse: Wallet.Model.SessionUpdateResponse) {
-                // Triggered when wallet receives the session update response from Dapp
+                /* Triggered when wallet receives the session update response from Dapp */
                 processSessionUpdateResponse(sessionUpdateResponse)
             }
 
             override fun onConnectionStateChange(state: Wallet.Model.ConnectionState) {
-                //Triggered whenever the connection state is changed
+                /* Triggered whenever the connection state is changed */
                 processConnectionStateChange(state)
             }
 
             override fun onError(error: Wallet.Model.Error) {
-                // Triggered whenever there is an issue inside the SDK
+                /* Triggered whenever there is an issue inside the SDK */
                 processError(error)
             }
         }
@@ -366,6 +359,10 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     }
 
     private fun connect(uri: String) {
+
+        /* Disconnect all pairings */
+        disconnect()
+
         val pairingParamsWallet = Wallet.Params.Pair(uri)
         Web3Wallet.pair(pairingParamsWallet,
             { _ ->
@@ -378,6 +375,19 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                     ).show()
                 }
             })
+    }
+
+    private fun disconnect() {
+        for (pair in CoreClient.Pairing.getPairings()) {
+            CoreClient.Pairing.disconnect(Core.Params.Disconnect(pair.topic)) { error ->
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        error.throwable.message, Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun String.decodeHex(): ByteArray {
@@ -658,6 +668,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                     })
             } catch (e: Exception) {
                 Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                disconnect()
             }
         }
     }
@@ -685,7 +696,18 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                     )
                 ) ?: throw Exception("Error formatting message")
 
-                val alertDialogObject = createAndShowCustomDialog("AuthRequest", message)
+                val alertDialogObject = createAndShowCustomDialog("AuthRequest", message) {
+                    Web3Wallet.respondAuthRequest(
+                        Wallet.Params.AuthRequestResponse.Error(
+                            authRequest.id,
+                            12001, /* https://docs.walletconnect.com/2.0/specs/clients/auth/codes */
+                            "User Rejected Request"
+                        )
+                    ) { error ->
+                        Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                    }
+                }
+
                 nfcCallback = { isoTagWrapper ->
                     try {
                         /* Sign with Secora Blockchain */
@@ -743,12 +765,14 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                         }
                     } catch (e: Exception) {
                         Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                        disconnect()
                     } finally {
                         alertDialogObject.alertDialog.dismiss()
                     }
                 }
             } catch (e: Exception) {
                 Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+                disconnect()
             }
         }
     }
@@ -815,7 +839,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
         alertDialog!!.setCanceledOnTouchOutside(false)
     }
 
-    private fun createAndShowCustomDialog(title: String, message: String): DialogDataObject {
+    private fun createAndShowCustomDialog(title: String, message: String,
+                                          negativeCallback: (() -> Unit) = {}): DialogDataObject {
 
         if (alertDialog != null && alertDialog!!.isShowing) {
             alertDialog!!.dismiss()
@@ -832,7 +857,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
             .setPositiveButton("Tap Your Card To Sign") { _, _ ->
             }
             .setNegativeButton("Cancel") { _, _ ->
-
+                negativeCallback()
             }
             .setOnDismissListener {
                 nfcCallback = { isoTagWrapper -> nfcDefaultCallback(isoTagWrapper) }
