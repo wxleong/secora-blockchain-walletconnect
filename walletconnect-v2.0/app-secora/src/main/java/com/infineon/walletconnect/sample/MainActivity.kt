@@ -713,7 +713,8 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                         /* eth_signTransaction */
                     }
                     Chains.Info.Eth.defaultMethods[2] -> {
-                        /* eth_sign */
+                        /* eth_sign (standard) */
+
                         val jsonArray = JSONArray(sessionRequest.request.params)
                         val account = jsonArray.getString(0)
                         val message = jsonArray.getString(1)
@@ -729,6 +730,19 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                     }
                     Chains.Info.Eth.defaultMethods[3] -> {
                         /* eth_signTypedData */
+
+                        val jsonArray = JSONArray(sessionRequest.request.params)
+                        val account = jsonArray.getString(0)
+                        val message = jsonArray.getString(1)
+                        val structuredDataEncoder = StructuredDataEncoder(message)
+                        val messageByteArray = structuredDataEncoder.structuredData
+
+                        if (account != address) {
+                            throw Exception("Requested account is not valid")
+                        }
+
+                        dialogMessage = message
+                        byteArrayToSign = Hash.sha3(messageByteArray)
                     }
                     Chains.Info.Eth.defaultMethods[4] -> {
                         /* personal_sign */
