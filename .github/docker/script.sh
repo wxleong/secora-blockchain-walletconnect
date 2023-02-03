@@ -27,4 +27,9 @@ cd walletconnect-v1.0
 chmod a+x ./gradlew
 ./gradlew assemble
 
+# Build walletconnect-v2.0
+cd walletconnect-v2.0
+chmod a+x ./gradlew
+./gradlew assemble
+
 exit 0
