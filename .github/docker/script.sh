@@ -23,13 +23,15 @@ mkdir -p ${ANDROID_HOME}/cmdline-tools && \
 (yes || true) | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
 # Build walletconnect-v1.0
-cd walletconnect-v1.0
+pushd walletconnect-v1.0
 chmod a+x ./gradlew
 ./gradlew assemble
+popd
 
 # Build walletconnect-v2.0
-cd walletconnect-v2.0
+pushd walletconnect-v2.0
 chmod a+x ./gradlew
 ./gradlew assemble
+popd
 
 exit 0

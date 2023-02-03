@@ -24,6 +24,7 @@ jobs:
           name: android-apks
           path: |
             walletconnect-v1.0/app-secora/build/outputs/apk/release/*.apk
+            walletconnect-v2.0/app-secora/build/outputs/apk/release/*.apk
   release:
     name: Create Release
     needs: test
