@@ -1122,10 +1122,10 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     }
 
     private fun processConnectionStateChange(state: Wallet.Model.ConnectionState) {
-        runOnUiThread {
+        /*runOnUiThread {
             Toast.makeText(this@MainActivity,
                 "onConnectionStateChange: $state", Toast.LENGTH_SHORT).show()
-        }
+        }*/
     }
 
     private fun processError(error: Wallet.Model.Error) {
