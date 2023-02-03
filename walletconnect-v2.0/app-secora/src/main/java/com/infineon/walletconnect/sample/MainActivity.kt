@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
+import com.google.gson.Gson
 import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
 import com.walletconnect.android.Core
 import com.walletconnect.android.CoreClient
@@ -35,7 +36,14 @@ import com.walletconnect.web3.wallet.client.Web3Wallet
 import com.walletconnect.web3.wallet.client.Wallet
 import okhttp3.internal.and
 import org.json.JSONArray
+import org.json.JSONObject
 import org.web3j.crypto.*
+import org.web3j.crypto.transaction.type.TransactionType
+import org.web3j.protocol.Web3j
+import org.web3j.protocol.core.DefaultBlockParameterName
+import org.web3j.protocol.http.HttpService
+import org.web3j.rlp.RlpEncoder
+import org.web3j.rlp.RlpList
 import java.math.BigInteger
 import java.nio.charset.Charset
 
@@ -699,20 +707,65 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                 }
 
                 val address = binding.addressInput.editText?.text.toString().lowercase()
-                var byteArrayToSign: ByteArray = ByteArray(0)
-                var dialogMessage: String = ""
-
-                //val jsonObject = JSONObject(sessionRequest.request.params)
-                //val keys = jsonObject.names()
+                var byteArrayToSign: ByteArray
+                var dialogMessage: String
+                var rawTransaction: RawTransaction? = null
+                var web3j: Web3j? = null
+                var chainId: Long = 0
 
                 when (sessionRequest.request.method) {
-                    Chains.Info.Eth.defaultMethods[0] -> {
-                        /* eth_sendTransaction */
+                    "eth_sendTransaction",
+                    "eth_signTransaction" -> {
+
+                        val jsonArray = JSONArray(sessionRequest.request.params)
+                        val jsonObject = JSONObject(jsonArray.getString(0))
+
+                        chainId = (binding.chainInput.editText?.text?.toString() ?: "1").toLong()
+
+                        when (chainId) {
+                            1.toLong() -> {
+                                /* Public node provider examples:
+                                   - https://www.infura.io/
+                                   - https://blastapi.io/public-api/ethereum
+                                   - and many more ... */
+                                web3j = Web3j.build(HttpService("https://eth-mainnet.public.blastapi.io"))
+                            }
+                            else -> {
+                                throw Exception("ChainId ${chainId} is not supported")
+                            }
+                        }
+
+                        val address = binding.addressInput.editText?.text?.toString() ?: "Address not set"
+                        val nonce = web3j.ethGetTransactionCount(address, DefaultBlockParameterName.PENDING).sendAsync().get().transactionCount
+                        val gasPrice = if (!jsonObject.has("gasPrice")) {
+                            web3j.ethGasPrice().sendAsync().get().gasPrice
+                        } else {
+                            BigInteger(jsonObject.getString("gasPrice").removePrefix("0x"), 16)
+                        }
+                        val gasLimit = if (!jsonObject.has("gasLimit")) {
+                            web3j.ethGetBlockByNumber(DefaultBlockParameterName.LATEST, false).sendAsync().get().block.gasLimit
+                        } else {
+                            BigInteger(jsonObject.getString("gasLimit").removePrefix("0x"), 16)
+                        }
+                        var value = if (!jsonObject.has("value")) {
+                            throw Exception("Field value is null")
+                        } else {
+                            jsonObject.getString("value").removePrefix("0x")
+                        }
+                        val maxPriorityFeePerGas = BigInteger("1", 10)
+                        val maxFeePerGas = maxPriorityFeePerGas + gasPrice
+
+                        /* Create TransactionType.LEGACY */
+                        rawTransaction = RawTransaction.createTransaction(nonce, gasPrice,
+                            gasLimit, jsonObject.getString("to"), BigInteger(value, 16),
+                            jsonObject.getString("data"))
+                        val encodedTransaction = TransactionEncoder.encode(rawTransaction, chainId)
+
+                        byteArrayToSign = Hash.sha3(encodedTransaction)
+                        dialogMessage = Gson().toJson(rawTransaction, RawTransaction::class.java)
+
                     }
-                    Chains.Info.Eth.defaultMethods[1] -> {
-                        /* eth_signTransaction */
-                    }
-                    Chains.Info.Eth.defaultMethods[2] -> {
+                    "eth_sign" -> {
                         /* eth_sign (standard) */
 
                         val jsonArray = JSONArray(sessionRequest.request.params)
@@ -728,8 +781,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                         dialogMessage = messageByteArray.toString(Charset.defaultCharset())
                         byteArrayToSign = Hash.sha3(prefix + messageByteArray)
                     }
-                    Chains.Info.Eth.defaultMethods[3] -> {
-                        /* eth_signTypedData */
+                    "eth_signTypedData" -> {
 
                         val jsonArray = JSONArray(sessionRequest.request.params)
                         val account = jsonArray.getString(0)
@@ -744,8 +796,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                         dialogMessage = message
                         byteArrayToSign = Hash.sha3(messageByteArray)
                     }
-                    Chains.Info.Eth.defaultMethods[4] -> {
-                        /* personal_sign */
+                    "personal_sign" -> {
 
                         val jsonArray = JSONArray(sessionRequest.request.params)
                         val message = jsonArray.getString(0)
@@ -800,7 +851,46 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                             pin,
                             byteArrayToSign
                         )
-                        val signature = Signature(sig.v, sig.r, sig.s).toCacaoSignature()
+                        var signature = Signature(sig.v, sig.r, sig.s).toCacaoSignature()
+
+                        /* Special handling for eth_sendTransaction and eth_signTransaction */
+
+                        when (sessionRequest.request.method) {
+                            "eth_sendTransaction",
+                            "eth_signTransaction" -> {
+                                if (rawTransaction == null
+                                    || web3j == null) {
+                                    throw Exception("Web3j initialization failed")
+                                }
+                                if (rawTransaction.type != TransactionType.LEGACY) {
+                                    throw Exception("Transaction type not supported")
+                                }
+
+                                val signatureData = Sign.SignatureData(sig.v, sig.r, sig.s)
+                                val eip155SignatureData =
+                                    TransactionEncoder.createEip155SignatureData(signatureData, chainId)
+                                val values = TransactionEncoder.asRlpValues(
+                                    rawTransaction,
+                                    eip155SignatureData
+                                )
+                                val rlpList = RlpList(values)
+                                val encoded = RlpEncoder.encode(rlpList)
+                                val hexString = "0x" + encoded.toHex()
+
+                                signature = if (sessionRequest.request.method == "eth_sendTransaction") {
+                                    val ethSendRawTransaction =
+                                        web3j.ethSendRawTransaction(hexString).sendAsync().get()
+                                    val error = ethSendRawTransaction.error
+                                    if (error != null) {
+                                        throw Exception(error.message)
+                                    } else {
+                                        ethSendRawTransaction.transactionHash
+                                    }
+                                } else {
+                                    hexString
+                                }
+                            }
+                        }
 
                         /* Send response */
 
@@ -821,14 +911,40 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                         runOnUiThread {
                             Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
                         }
-                        disconnect()
+                        Web3Wallet.respondSessionRequest(
+                            Wallet.Params.SessionRequestResponse(
+                                sessionRequest.topic,
+                                Wallet.Model.JsonRpcResponse.JsonRpcError(
+                                    sessionRequest.request.id,
+                                    4001, /* https://docs.walletconnect.com/2.0/specs/clients/sign/error-codes */
+                                    e.message.toString()
+                                )
+                            )
+                        ){ error ->
+                            runOnUiThread {
+                                Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                            }
+                        }
                     } finally {
                         alertDialogObject.alertDialog.dismiss()
                     }
                 }
             } catch (e: Exception) {
                 Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
-                disconnect()
+                Web3Wallet.respondSessionRequest(
+                    Wallet.Params.SessionRequestResponse(
+                        sessionRequest.topic,
+                        Wallet.Model.JsonRpcResponse.JsonRpcError(
+                            sessionRequest.request.id,
+                            4001, /* https://docs.walletconnect.com/2.0/specs/clients/sign/error-codes */
+                            e.message.toString()
+                        )
+                    )
+                ){ error ->
+                    runOnUiThread {
+                        Toast.makeText(this, error.throwable.message, Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
     }
