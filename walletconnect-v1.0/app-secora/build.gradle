@@ -5,7 +5,7 @@ apply plugin: 'kotlin-android'
 android {
     compileSdkVersion 31
     defaultConfig {
-        applicationId "com.infineon.walletconnect.sample"
+        applicationId "com.infineon.walletconnect.v1.sample"
         minSdkVersion 23
         targetSdkVersion 31
         versionCode 1

@@ -1,4 +1,4 @@
-package com.infineon.walletconnect.sample
+package com.infineon.walletconnect.v1.sample
 
 import android.app.PendingIntent
 import android.content.DialogInterface
@@ -22,6 +22,7 @@ import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.infineon.walletconnect.v1.sample.databinding.ActivityMainBinding
 import com.trustwallet.walletconnect.WCClient
 import com.trustwallet.walletconnect.exceptions.InvalidSessionException
 import com.trustwallet.walletconnect.extensions.toHex
@@ -35,7 +36,6 @@ import com.trustwallet.walletconnect.models.binance.WCBinanceTxConfirmParam
 import com.trustwallet.walletconnect.models.ethereum.WCEthereumSignMessage
 import com.trustwallet.walletconnect.models.ethereum.WCEthereumTransaction
 import com.trustwallet.walletconnect.models.session.WCSession
-import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
 import okhttp3.OkHttpClient
 import okhttp3.internal.and
 import org.web3j.crypto.*

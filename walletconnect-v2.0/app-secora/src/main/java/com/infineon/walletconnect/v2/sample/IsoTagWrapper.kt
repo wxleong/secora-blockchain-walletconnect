@@ -1,4 +1,4 @@
-package com.infineon.walletconnect.sample
+package com.infineon.walletconnect.v2.sample
 
 import android.nfc.tech.IsoDep
 import com.github.infineon.NfcTranceiver

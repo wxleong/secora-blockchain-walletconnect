@@ -1,4 +1,4 @@
-package com.infineon.walletconnect.sample
+package com.infineon.walletconnect.v2.sample
 
 enum class Chains(
     val chainName: String,

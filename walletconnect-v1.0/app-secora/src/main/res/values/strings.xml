@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">WalletConnect</string>
+    <string name="app_name">WalletConnect v1.0</string>
     <string-array name="nfc_actions">
         <item>Read public key or create if not exist</item>
         <item>Generate key from seed</item>

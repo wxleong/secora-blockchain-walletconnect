@@ -1,4 +1,4 @@
-package com.infineon.walletconnect.sample
+package com.infineon.walletconnect.v2.sample
 
 import android.app.PendingIntent
 import android.content.DialogInterface
@@ -21,7 +21,7 @@ import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
 import com.google.gson.Gson
-import com.infineon.walletconnect.sample.databinding.ActivityMainBinding
+import com.infineon.walletconnect.v2.sample.databinding.ActivityMainBinding
 import com.walletconnect.android.Core
 import com.walletconnect.android.CoreClient
 import com.walletconnect.android.cacao.signature.SignatureType
