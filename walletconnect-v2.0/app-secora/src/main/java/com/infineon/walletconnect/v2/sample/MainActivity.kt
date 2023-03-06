@@ -702,16 +702,24 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     private fun processSessionRequest(sessionRequest: Wallet.Model.SessionRequest) {
         runOnUiThread {
             try {
-                if (sessionRequest.chainId != Chains.ETHEREUM_MAIN.chainId) {
-                    throw Exception("Only chainId ${Chains.ETHEREUM_MAIN.chainId} is supported")
-                }
-
                 val address = binding.addressInput.editText?.text.toString().lowercase()
                 var byteArrayToSign: ByteArray
                 var dialogMessage: String
                 var rawTransaction: RawTransaction? = null
                 var web3j: Web3j? = null
                 var chainId: Long = 0
+
+                when (sessionRequest.chainId) {
+                    Chains.ETHEREUM_MAIN.chainId -> {
+                        chainId = Chains.ETHEREUM_MAIN.chainReference.toLong()
+                    }
+                    Chains.ETHEREUM_GOERLI.chainId -> {
+                        chainId = Chains.ETHEREUM_GOERLI.chainReference.toLong()
+                    }
+                    else -> {
+                        throw Exception("Only chainId ${Chains.ETHEREUM_MAIN.chainId} and ${Chains.ETHEREUM_GOERLI.chainId} are supported")
+                    }
+                }
 
                 when (sessionRequest.request.method) {
                     "eth_sendTransaction",
@@ -720,18 +728,19 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
                         val jsonArray = JSONArray(sessionRequest.request.params)
                         val jsonObject = JSONObject(jsonArray.getString(0))
 
-                        chainId = (binding.chainInput.editText?.text?.toString() ?: "1").toLong()
-
+                        /* Public node provider examples:
+                           - https://www.infura.io/
+                           - https://blastapi.io/public-api/ethereum
+                           - and many more ... */
                         when (chainId) {
-                            1.toLong() -> {
-                                /* Public node provider examples:
-                                   - https://www.infura.io/
-                                   - https://blastapi.io/public-api/ethereum
-                                   - and many more ... */
+                            Chains.ETHEREUM_MAIN.chainReference.toLong() -> {
                                 web3j = Web3j.build(HttpService("https://eth-mainnet.public.blastapi.io"))
                             }
+                            Chains.ETHEREUM_GOERLI.chainReference.toLong() -> {
+                                web3j = Web3j.build(HttpService("https://eth-goerli.public.blastapi.io"))
+                            }
                             else -> {
-                                throw Exception("ChainId ${chainId} is not supported")
+                                throw Exception("Only chainId ${Chains.ETHEREUM_MAIN.chainId} and ${Chains.ETHEREUM_GOERLI.chainId} are supported")
                             }
                         }
 
