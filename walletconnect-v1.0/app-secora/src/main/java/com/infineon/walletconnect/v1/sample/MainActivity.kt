@@ -173,7 +173,7 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         try {
-            val tag: Tag? = intent!!.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+            val tag: Tag = intent!!.getParcelableExtra(NfcAdapter.EXTRA_TAG) ?: return
             val isoDep = IsoDep.get(tag) /* ISO 14443-4 Type A & B */
 
             nfcCallback?.let { it(IsoTagWrapper(isoDep)) }
