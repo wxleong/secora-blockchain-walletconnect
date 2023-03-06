@@ -34,5 +34,14 @@ What is WalletConnect? WalletConnect is an open protocol to communicate securely
   </tr>
 </table>
 
+# Demo
+
+- WalletConnect v1.0; https://opensea.io
+  ![](https://github.com/wxleong/secora-blockchain-walletconnect/blob/develop-genesis/media/wc1.0_opensea.gif)
+- WalletConnect v1.0; https://example.walletconnect.org
+  ![](https://github.com/wxleong/secora-blockchain-walletconnect/blob/develop-genesis/media/wc1.0_example.gif)
+- WalletConnect v2.0; https://react-app.walletconnect.com
+  ![](https://github.com/wxleong/secora-blockchain-walletconnect/blob/develop-genesis/media/wc2.0_example.gif)
+
 # License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
