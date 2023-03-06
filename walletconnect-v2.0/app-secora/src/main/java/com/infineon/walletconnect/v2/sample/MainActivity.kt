@@ -17,6 +17,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
@@ -224,6 +225,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         try {
+            val rootView: ConstraintLayout = findViewById(R.id.rootView)
+            rootView.clearFocus()
+
             val tag: Tag = intent!!.getParcelableExtra(NfcAdapter.EXTRA_TAG) ?: return
             val isoDep = IsoDep.get(tag) /* ISO 14443-4 Type A & B */
 

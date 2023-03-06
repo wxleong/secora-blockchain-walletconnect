@@ -11,12 +11,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 import com.budiyev.android.codescanner.*
 import com.github.infineon.NfcUtils
 import com.google.android.material.textfield.TextInputLayout
@@ -48,6 +46,7 @@ import org.web3j.rlp.RlpEncoder
 import org.web3j.rlp.RlpList
 import java.math.BigInteger
 import java.nio.charset.Charset
+
 
 class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
 
@@ -173,6 +172,9 @@ class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         try {
+            val rootView: ConstraintLayout = findViewById(R.id.rootView)
+            rootView.clearFocus()
+
             val tag: Tag = intent!!.getParcelableExtra(NfcAdapter.EXTRA_TAG) ?: return
             val isoDep = IsoDep.get(tag) /* ISO 14443-4 Type A & B */
 
