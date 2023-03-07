@@ -11,6 +11,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v3.0.3
+        continue-on-error: true
+        with:
+          head-ref: ${{ github.ref }}
+          base-ref: 878bff708864653b5e6f10076760993478ec5db6
+          fail-on-severity: low
+          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-1.1, Apache-2.0
       - name: Build projects
         env:
           PROJECT_NAME: ${{ github.event.repository.name }}
@@ -42,7 +50,7 @@ jobs:
           path: apks-collection
       - name: Changelog Pruning
         run: |
-          sed -n `awk '/## \[[x0-9]/{c++} c==1{ print NR; exit }' CHANGELOG.md`',$p' CHANGELOG.md > .CHANGELOG.md.tmp
+          sed -n `awk '/## \[${{ github.ref_name }}/{c++} c==1{ print NR; exit }' CHANGELOG.md`',$p' CHANGELOG.md > .CHANGELOG.md.tmp
           sed `awk '/## \[[x0-9]/{c++} c==2{ print NR; exit }' .CHANGELOG.md.tmp`',$d' .CHANGELOG.md.tmp > ${{ github.workspace }}-CHANGELOG.txt
       - name: Create release
         uses: softprops/action-gh-release@v1
